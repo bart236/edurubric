@@ -281,6 +281,42 @@ function drempelsTable(analyse: Analyse): Table {
   });
 }
 
+/** Docent-rubric: per leerdoel een rij met Nog niet / Op weg / Behaald checkboxes voor de docent bij nakijken. */
+function docentRubricTable(analyse: Analyse): Table {
+  const header = new TableRow({
+    tableHeader: true,
+    children: [
+      headerCell("Leerdoel", 35),
+      headerCell("Nog niet", 12),
+      headerCell("Op weg", 12),
+      headerCell("Behaald", 12),
+      headerCell("Toelichting", 29),
+    ],
+  });
+  const rows = analyse.leerdoelen.map((ld) => {
+    return new TableRow({
+      children: [
+        cell(
+          [
+            para([txt(ld.code, { bold: true })], { spacingAfter: 40 }),
+            para([txt(ld.leerlingtaal, { size: fontSizeSmall })]),
+          ],
+          { width: 35, widthType: WidthType.PERCENTAGE },
+        ),
+        bodyCell("☐", 12, { align: AlignmentType.CENTER }),
+        bodyCell("☐", 12, { align: AlignmentType.CENTER }),
+        bodyCell("☐", 12, { align: AlignmentType.CENTER }),
+        bodyCell(" ", 29),
+      ],
+    });
+  });
+  return new Table({
+    rows: [header, ...rows],
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: tableBorders,
+  });
+}
+
 /**
  * Sorteer-key voor vraagnummers in toets-volgorde.
  * Ondersteunt: "1", "1a", "1b", "2", "10a", etc.
@@ -538,6 +574,60 @@ export async function buildAnalyseDocx(
   const doc = new Document({
     creator: "EduRubric",
     title: `Analyse — ${ctx.vak} ${ctx.onderwerp}`,
+    sections: [
+      {
+        properties: {
+          page: {
+            margin: { top: 1000, right: 1000, bottom: 1000, left: 1000 },
+          },
+        },
+        children,
+      },
+    ],
+  });
+  return await Packer.toBuffer(doc);
+}
+
+export async function buildDocentRubricDocx(
+  ctx: Context,
+  analyse: Analyse,
+  toetsNaam?: string,
+): Promise<Buffer> {
+  const children: (Paragraph | Table)[] = [];
+
+  children.push(
+    ...titleBlock(
+      "Docent-rubric",
+      `${ctx.vak} · leerjaar ${ctx.leerjaar} · ${ctx.niveau} · ${ctx.onderwerp}`,
+    ),
+  );
+  children.push(feedbackHeaderTable(ctx, toetsNaam));
+
+  children.push(sectionHeading("Beoordeling per leerdoel"));
+  children.push(
+    para(
+      [
+        txt(
+          "Kruis aan tijdens of na het nakijken. Gebruik de toelichting-kolom voor specifieke aandachtspunten per leerling.",
+          { size: fontSizeSmall, color: "595959" },
+        ),
+      ],
+      { spacingAfter: 120 },
+    ),
+  );
+  children.push(docentRubricTable(analyse));
+
+  children.push(sectionHeading("Drempels — wat betekent dit?"));
+  children.push(drempelsTable(analyse));
+
+  children.push(sectionHeading("Opmerking docent"));
+  children.push(...reflectieBlock("Toelichting / vervolgactie"));
+
+  children.push(footer());
+
+  const doc = new Document({
+    creator: "EduRubric",
+    title: `Docent-rubric — ${ctx.vak} ${ctx.onderwerp}`,
     sections: [
       {
         properties: {

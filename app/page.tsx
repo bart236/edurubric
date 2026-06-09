@@ -10,6 +10,42 @@ import type { Analyse, Context } from "@/lib/schemas";
 
 type Phase = "input" | "analyzing" | "results";
 
+function DownloadCard({
+  title,
+  subtitle,
+  body,
+  loading,
+  disabled,
+  onClick,
+}: {
+  title: string;
+  subtitle: string;
+  body: string;
+  loading: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="text-left rounded-lg border border-[color:var(--border)] bg-white p-4 transition hover:border-[color:var(--pcc-blauw)] hover:bg-[color:var(--pcc-blauw-licht)] disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      <div className="flex items-baseline justify-between mb-1">
+        <span className="font-semibold text-[color:var(--pcc-blauw)]">{title}</span>
+        <span className="text-[color:var(--pcc-blauw)] text-lg">
+          {loading ? "…" : "↓"}
+        </span>
+      </div>
+      <div className="text-xs text-[color:var(--muted)] uppercase tracking-wide mb-2">
+        {subtitle}
+      </div>
+      <p className="text-sm text-[color:var(--foreground)] leading-snug">{body}</p>
+    </button>
+  );
+}
+
 const initialContext: Context = {
   vak: "",
   leerjaar: "1",
@@ -64,7 +100,9 @@ export default function Home() {
     setError(null);
   };
 
-  const download = async (which: "analyse" | "feedback" | "bundle") => {
+  type DocType = "analyse" | "docent" | "leerling" | "bundle";
+
+  const download = async (which: DocType) => {
     if (!analyse) return;
     setDownloading(which);
     try {
@@ -244,36 +282,48 @@ export default function Home() {
               <div>
                 <h2 className="text-xl font-semibold">Download</h2>
                 <p className="text-sm text-[color:var(--muted)] mt-1">
-                  Twee aparte .docx-bestanden — voor sectie-overleg én voor achter de toets.
+                  Drie aparte .docx-bestanden — voor sectie-overleg, voor de docent bij nakijken, en voor de leerling om zelf te analyseren.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-3">
+
+              <div className="grid sm:grid-cols-3 gap-3">
+                <DownloadCard
+                  title="Analyse"
+                  subtitle="Voor sectie / MT"
+                  body="Leerdoelen, mapping, gewicht per leerdoel, drempels en observatie. Voor inhoudelijk overleg."
+                  loading={downloading === "analyse"}
+                  disabled={!!downloading}
+                  onClick={() => download("analyse")}
+                />
+                <DownloadCard
+                  title="Docent-rubric"
+                  subtitle="Voor docent bij nakijken"
+                  body="Per leerdoel checkboxes (Nog niet / Op weg / Behaald) met toelichting-kolom. Drempels-reminder onderaan."
+                  loading={downloading === "docent"}
+                  disabled={!!downloading}
+                  onClick={() => download("docent")}
+                />
+                <DownloadCard
+                  title="Leerling-analyse"
+                  subtitle="Achter de toets"
+                  body="Stap 1: punten per vraag invullen. Stap 2: per leerdoel zelf optellen en beoordelen. Stap 3: reflectie."
+                  loading={downloading === "leerling"}
+                  disabled={!!downloading}
+                  onClick={() => download("leerling")}
+                />
+              </div>
+
+              <div className="flex items-center gap-3 pt-2 border-t border-[color:var(--border)]">
                 <button
                   className="btn btn-primary"
                   onClick={() => download("bundle")}
                   disabled={!!downloading}
                 >
-                  {downloading === "bundle" ? "..." : "↓ Beide (zip)"}
+                  {downloading === "bundle" ? "..." : "↓ Alle drie (zip)"}
                 </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => download("analyse")}
-                  disabled={!!downloading}
-                >
-                  {downloading === "analyse" ? "..." : "↓ Analyse-document"}
+                <button className="btn btn-ghost ml-auto" onClick={reset}>
+                  ↺ Nieuwe toets
                 </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => download("feedback")}
-                  disabled={!!downloading}
-                >
-                  {downloading === "feedback" ? "..." : "↓ Feedback-pagina"}
-                </button>
-                <div className="ml-auto">
-                  <button className="btn btn-ghost" onClick={reset}>
-                    ↺ Nieuwe toets
-                  </button>
-                </div>
               </div>
             </section>
           </>
