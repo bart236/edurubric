@@ -171,7 +171,7 @@ export default function Home() {
               <div>
                 <h2 className="text-xl font-semibold">Upload je toets</h2>
                 <p className="text-sm text-[color:var(--muted)] mt-1">
-                  Word-bestand (.docx) — zonder leerlingnamen of antwoorden.
+                  Word-bestand (.docx) of doorzoekbare PDF — zonder leerlingnamen of antwoorden.
                 </p>
               </div>
               <UploadZone file={file} onChange={setFile} />

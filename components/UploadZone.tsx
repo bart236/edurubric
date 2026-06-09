@@ -40,7 +40,7 @@ export function UploadZone({ file, onChange, disabled }: Props) {
       <input
         id="file-input"
         type="file"
-        accept=".docx"
+        accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         disabled={disabled}
         className="sr-only"
         onChange={(e) => onChange(e.target.files?.[0] ?? null)}
@@ -56,9 +56,9 @@ export function UploadZone({ file, onChange, disabled }: Props) {
       ) : (
         <div className="space-y-2">
           <div className="text-3xl">⬆️</div>
-          <div className="font-medium">Sleep een toets-docx hierheen</div>
+          <div className="font-medium">Sleep een toets hierheen</div>
           <div className="text-sm text-[color:var(--muted)]">
-            of klik om te selecteren · alleen .docx · alléén blanco toetsen, geen leerlingdata
+            of klik om te selecteren · .docx of .pdf · max 10 MB · alléén blanco toetsen, geen leerlingdata
           </div>
         </div>
       )}

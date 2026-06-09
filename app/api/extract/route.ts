@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
-import { extractDocxText } from "@/lib/extract";
+import { extractTextFromFile } from "@/lib/extract";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
+
+const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export async function POST(request: Request) {
   try {
@@ -14,17 +17,26 @@ export async function POST(request: Request) {
       );
     }
     const name = file.name.toLowerCase();
-    if (!name.endsWith(".docx")) {
+    if (!name.endsWith(".docx") && !name.endsWith(".pdf")) {
       return NextResponse.json(
-        { error: "Alleen .docx wordt in MVP ondersteund." },
+        { error: "Alleen .docx of .pdf wordt ondersteund." },
         { status: 415 },
       );
     }
+    if (file.size > MAX_BYTES) {
+      return NextResponse.json(
+        { error: `Bestand is te groot (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is 10 MB.` },
+        { status: 413 },
+      );
+    }
     const arrayBuffer = await file.arrayBuffer();
-    const text = await extractDocxText(Buffer.from(arrayBuffer));
+    const text = await extractTextFromFile(Buffer.from(arrayBuffer), file.name);
     if (text.length < 50) {
       return NextResponse.json(
-        { error: "Geen leesbare tekst gevonden in het bestand." },
+        {
+          error:
+            "Geen leesbare tekst gevonden. Bij een gescande PDF is OCR nodig — gebruik een doorzoekbare PDF of de .docx.",
+        },
         { status: 422 },
       );
     }
