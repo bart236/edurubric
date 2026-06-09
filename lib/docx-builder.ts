@@ -281,31 +281,45 @@ function drempelsTable(analyse: Analyse): Table {
   });
 }
 
-function rubricTable(analyse: Analyse): Table {
+/**
+ * Sorteer-key voor vraagnummers in toets-volgorde.
+ * Ondersteunt: "1", "1a", "1b", "2", "10a", etc.
+ */
+function vraagSortKey(vraag: string): [number, string] {
+  const m = /^(\d+)([a-zA-Z]*)/.exec(vraag.trim());
+  if (m) return [parseInt(m[1], 10), m[2].toLowerCase()];
+  return [Number.MAX_SAFE_INTEGER, vraag.toLowerCase()];
+}
+
+function sortedMapping(analyse: Analyse): typeof analyse.mapping {
+  return [...analyse.mapping].sort((a, b) => {
+    const ka = vraagSortKey(a.vraag);
+    const kb = vraagSortKey(b.vraag);
+    if (ka[0] !== kb[0]) return ka[0] - kb[0];
+    return ka[1] < kb[1] ? -1 : ka[1] > kb[1] ? 1 : 0;
+  });
+}
+
+/** Tabel: per vraag (volgorde toets) leerling vult zelf in hoeveel punten gehaald. */
+function puntenPerVraagTable(analyse: Analyse): Table {
   const header = new TableRow({
     tableHeader: true,
     children: [
-      headerCell("Leerdoel", 35),
-      headerCell("Nog niet", 12),
-      headerCell("Op weg", 12),
-      headerCell("Behaald", 12),
-      headerCell("Toelichting", 29),
+      headerCell("Vraag", 10),
+      headerCell("Onderwerp", 45),
+      headerCell("Leerdoel", 20),
+      headerCell("Max", 10),
+      headerCell("Mijn punten", 15),
     ],
   });
-  const rows = analyse.leerdoelen.map((ld) => {
+  const rows = sortedMapping(analyse).map((m) => {
     return new TableRow({
       children: [
-        cell(
-          [
-            para([txt(ld.code, { bold: true })], { spacingAfter: 40 }),
-            para([txt(ld.leerlingtaal, { size: fontSizeSmall })]),
-          ],
-          { width: 35, widthType: WidthType.PERCENTAGE },
-        ),
-        bodyCell("☐", 12, { align: AlignmentType.CENTER }),
-        bodyCell("☐", 12, { align: AlignmentType.CENTER }),
-        bodyCell("☐", 12, { align: AlignmentType.CENTER }),
-        bodyCell(" ", 29),
+        bodyCell(m.vraag, 10, { bold: true }),
+        bodyCell(m.omschrijving, 45),
+        bodyCell(m.leerdoelCodes.join(", "), 20),
+        bodyCell(String(m.punten), 10, { align: AlignmentType.CENTER }),
+        bodyCell(`____ / ${m.punten}`, 15, { align: AlignmentType.CENTER }),
       ],
     });
   });
@@ -314,6 +328,129 @@ function rubricTable(analyse: Analyse): Table {
     width: { size: 100, type: WidthType.PERCENTAGE },
     borders: tableBorders,
   });
+}
+
+/** Per leerdoel: welke vragen tellen mee + max + lege box voor eigen totaal en oordeel. */
+function analysePerLeerdoel(analyse: Analyse): (Paragraph | Table)[] {
+  const drempelByCode: Record<string, Analyse["drempels"][number]> =
+    Object.fromEntries(analyse.drempels.map((d) => [d.leerdoelCode, d]));
+
+  const out: (Paragraph | Table)[] = [];
+
+  for (const ld of analyse.leerdoelen) {
+    // Verzamel vragen die bij dit leerdoel horen, met share van punten
+    const items = analyse.mapping
+      .filter((m) => m.leerdoelCodes.includes(ld.code))
+      .map((m) => ({
+        vraag: m.vraag,
+        share: m.punten / m.leerdoelCodes.length,
+        gedeeld: m.leerdoelCodes.length > 1,
+      }))
+      .sort((a, b) => {
+        const ka = vraagSortKey(a.vraag);
+        const kb = vraagSortKey(b.vraag);
+        if (ka[0] !== kb[0]) return ka[0] - kb[0];
+        return ka[1] < kb[1] ? -1 : ka[1] > kb[1] ? 1 : 0;
+      });
+    const totaalMax = items.reduce((s, i) => s + i.share, 0);
+
+    const vragenLijst = items.length
+      ? items
+          .map((i) => {
+            const pt = Number.isInteger(i.share)
+              ? i.share.toString()
+              : i.share.toFixed(1);
+            return `${i.vraag} (${pt} pt${i.gedeeld ? ", gedeeld" : ""})`;
+          })
+          .join(" · ")
+      : "geen vragen gekoppeld";
+
+    const d = drempelByCode[ld.code];
+    const drempelsText = d
+      ? `Behaald ≥ ${d.behaaldVanafProcent}% · Op weg ${d.nogNietTotProcent}–${d.behaaldVanafProcent - 1}% · Nog niet < ${d.nogNietTotProcent}%`
+      : "Behaald ≥ 75% · Op weg 40–74% · Nog niet < 40%";
+
+    const totaalStr = Number.isInteger(totaalMax)
+      ? totaalMax.toString()
+      : totaalMax.toFixed(1);
+
+    // Eén tabel per leerdoel (compact + duidelijk visueel)
+    const headerRow = new TableRow({
+      tableHeader: true,
+      children: [
+        cell(
+          [
+            para([
+              txt(ld.code, { bold: true, color: "FFFFFF" }),
+              txt(`  ·  ${ld.titel}`, { color: "FFFFFF", bold: true }),
+            ]),
+            para([txt(ld.leerlingtaal, { color: "FFFFFF", size: fontSizeSmall })]),
+          ],
+          { bg: PCC_BLAUW, width: 100, widthType: WidthType.PERCENTAGE },
+        ),
+      ],
+    });
+
+    const vragenRow = new TableRow({
+      children: [
+        cell(
+          [
+            para(
+              [
+                txt("Vragen die meetellen: ", { bold: true, size: fontSizeSmall }),
+                txt(vragenLijst, { size: fontSizeSmall }),
+              ],
+              { spacingAfter: 60 },
+            ),
+            para([
+              txt("Totaal mogelijk: ", { bold: true, size: fontSizeSmall }),
+              txt(`${totaalStr} pt`, { size: fontSizeSmall }),
+            ]),
+          ],
+          { bg: ZACHT_GRIJS },
+        ),
+      ],
+    });
+
+    const invulRow = new TableRow({
+      children: [
+        cell(
+          [
+            para(
+              [
+                txt("Mijn punten:  ", { bold: true }),
+                txt(`____  /  ${totaalStr}`),
+                txt("           Percentage: ", { bold: true }),
+                txt("_____ %"),
+              ],
+              { spacingAfter: 120 },
+            ),
+            para(
+              [
+                txt("Mijn beoordeling:   ", { bold: true }),
+                txt("☐ Behaald     ☐ Op weg     ☐ Nog niet"),
+              ],
+              { spacingAfter: 60 },
+            ),
+            para([
+              txt(drempelsText, { size: fontSizeSmall, color: "595959" }),
+            ]),
+          ],
+        ),
+      ],
+    });
+
+    out.push(
+      new Table({
+        rows: [headerRow, vragenRow, invulRow],
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: tableBorders,
+      }),
+    );
+    out.push(emptyPara());
+  }
+
+  return out;
 }
 
 function feedbackHeaderTable(ctx: Context, toetsNaam?: string): Table {
@@ -424,23 +561,53 @@ export async function buildFeedbackDocx(
 
   children.push(
     ...titleBlock(
-      "Feedback-pagina",
+      "Mijn analyse",
       `${ctx.vak} · leerjaar ${ctx.leerjaar} · ${ctx.niveau} · ${ctx.onderwerp}`,
     ),
   );
   children.push(feedbackHeaderTable(ctx, toetsNaam));
 
-  children.push(sectionHeading("Rubric"));
-  children.push(rubricTable(analyse));
-
-  children.push(sectionHeading("Drempels — wat betekent dit?"));
-  children.push(drempelsTable(analyse));
-
-  children.push(sectionHeading("Wat ga ik hiermee doen?"));
+  children.push(sectionHeading("Stap 1 — Vul per vraag in hoeveel punten je hebt"));
   children.push(
-    para([txt("Schrijf op: welk leerdoel oefen je nog en hoe?", { size: fontSizeSmall, color: "595959" })], { spacingAfter: 80 }),
+    para(
+      [
+        txt(
+          "Pak je nagekeken toets erbij. Schrijf per vraag op hoeveel punten je hebt gehaald. Vragen staan in toetsvolgorde.",
+          { size: fontSizeSmall, color: "595959" },
+        ),
+      ],
+      { spacingAfter: 120 },
+    ),
   );
-  children.push(...reflectieBlock("Mijn reflectie"));
+  children.push(puntenPerVraagTable(analyse));
+
+  children.push(sectionHeading("Stap 2 — Analyseer per leerdoel"));
+  children.push(
+    para(
+      [
+        txt(
+          "Tel per leerdoel je punten op. Reken het percentage uit (mijn punten ÷ totaal × 100). Kruis daarna aan: Behaald, Op weg of Nog niet.",
+          { size: fontSizeSmall, color: "595959" },
+        ),
+      ],
+      { spacingAfter: 120 },
+    ),
+  );
+  children.push(...analysePerLeerdoel(analyse));
+
+  children.push(sectionHeading("Stap 3 — Wat ga ik oefenen?"));
+  children.push(
+    para(
+      [
+        txt(
+          "Welk leerdoel ga je extra oefenen, en hoe? Schrijf concreet op wat je gaat doen.",
+          { size: fontSizeSmall, color: "595959" },
+        ),
+      ],
+      { spacingAfter: 80 },
+    ),
+  );
+  children.push(...reflectieBlock("Mijn plan"));
 
   children.push(...reflectieBlock("Opmerking docent"));
 
